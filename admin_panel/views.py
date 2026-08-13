@@ -7173,9 +7173,156 @@ class SilverBankAdminViewSet(AdminBaseViewSet):
 # =========================================================
 
 
+# class GoldAnnouncementAdminViewSet(AdminBaseViewSet):
+
+#     queryset = GoldAnnouncement.objects.all().order_by("-id")
+
+#     def get_queryset(self):
+
+#         qs = super().get_queryset()
+
+#         search = self.request.GET.get("search")
+#         ordering = self.request.GET.get("ordering")
+
+#         if search:
+#             qs = qs.filter(
+#                 Q(title__icontains=search) | Q(description__icontains=search)
+#             )
+
+#         allowed_ordering = [
+#             "id",
+#             "-id",
+#             "created_at",
+#             "-created_at",
+#             "title",
+#             "-title",
+#         ]
+
+#         if ordering in allowed_ordering:
+#             qs = qs.order_by(ordering)
+
+#         return qs
+
+#     # ======================
+#     # LIST
+#     # ======================
+
+#     def list(self, request):
+
+#         announcements = self.get_queryset()
+
+#         results = []
+
+#         for item in announcements:
+#             results.append(GoldAnnouncementSerializer(item).data)
+
+#         return success_response(
+#             "لیست اطلاعیه‌های طلا", {"total_results": len(results), "results": results}
+#         )
+
+#     # ======================
+#     # RETRIEVE
+#     # ======================
+
+#     def retrieve(self, request, pk=None):
+
+#         obj = get_object_or_404(GoldAnnouncement, pk=pk)
+
+#         return success_response("جزئیات اطلاعیه", GoldAnnouncementSerializer(obj).data)
+
+#     # ======================
+#     # CREATE
+#     # ======================
+
+#     def create(self, request):
+
+#         serializer = GoldAnnouncementSerializer(data=request.data)
+
+#         serializer.is_valid(raise_exception=True)
+
+#         obj = serializer.save()
+
+#         return success_response(
+#             "اطلاعیه ایجاد شد", GoldAnnouncementSerializer(obj).data
+#         )
+
+#     # ======================
+#     # UPDATE
+#     # ======================
+
+#     def update(self, request, pk=None, *args, **kwargs):
+
+#         obj = get_object_or_404(GoldAnnouncement, pk=pk)
+
+#         serializer = GoldAnnouncementSerializer(obj, data=request.data, partial=True)
+
+#         serializer.is_valid(raise_exception=True)
+
+#         serializer.save()
+
+#         obj.refresh_from_db()
+
+#         return success_response(
+#             "اطلاعیه ویرایش شد", {"results": GoldAnnouncementSerializer(obj).data}
+#         )
+
+#     # ======================
+#     # DELETE
+#     # ======================
+
+#     def destroy(self, request, pk=None):
+
+#         obj = get_object_or_404(GoldAnnouncement, pk=pk)
+
+#         obj.delete()
+
+#         return success_response("اطلاعیه حذف شد")
+
+import logging
+
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+
+from .models import GoldAnnouncement
+from .serializers import GoldAnnouncementSerializer
+from .utils import create_admin_log
+
+from accounts.fcm_service import FCMService
+from accounts.utils import success_response
+
+logger = logging.getLogger(__name__)
+
+
 class GoldAnnouncementAdminViewSet(AdminBaseViewSet):
 
     queryset = GoldAnnouncement.objects.all().order_by("-id")
+    serializer_class = GoldAnnouncementSerializer
+
+    # =========================================================
+    # LIST
+    # =========================================================
+
+    def list(self, request):
+
+        announcements = self.get_queryset()
+
+        results = GoldAnnouncementSerializer(
+            announcements,
+            many=True
+        ).data
+
+        return success_response(
+            "لیست اطلاعیه‌های طلا",
+            {
+                "total_results": len(results),
+                "results": results,
+            }
+        )
+
+    # =========================================================
+    # QUERYSET
+    # =========================================================
 
     def get_queryset(self):
 
@@ -7186,7 +7333,8 @@ class GoldAnnouncementAdminViewSet(AdminBaseViewSet):
 
         if search:
             qs = qs.filter(
-                Q(title__icontains=search) | Q(description__icontains=search)
+                Q(title__icontains=search)
+                | Q(description__icontains=search)
             )
 
         allowed_ordering = [
@@ -7203,82 +7351,307 @@ class GoldAnnouncementAdminViewSet(AdminBaseViewSet):
 
         return qs
 
-    # ======================
-    # LIST
-    # ======================
-
-    def list(self, request):
-
-        announcements = self.get_queryset()
-
-        results = []
-
-        for item in announcements:
-            results.append(GoldAnnouncementSerializer(item).data)
-
-        return success_response(
-            "لیست اطلاعیه‌های طلا", {"total_results": len(results), "results": results}
-        )
-
-    # ======================
+    # =========================================================
     # RETRIEVE
-    # ======================
+    # =========================================================
 
     def retrieve(self, request, pk=None):
 
-        obj = get_object_or_404(GoldAnnouncement, pk=pk)
+        obj = get_object_or_404(
+            GoldAnnouncement,
+            pk=pk
+        )
 
-        return success_response("جزئیات اطلاعیه", GoldAnnouncementSerializer(obj).data)
+        return success_response(
+            "جزئیات اطلاعیه",
+            GoldAnnouncementSerializer(obj).data
+        )
 
-    # ======================
+    # =========================================================
     # CREATE
-    # ======================
+    # =========================================================
 
     def create(self, request):
 
-        serializer = GoldAnnouncementSerializer(data=request.data)
-
-        serializer.is_valid(raise_exception=True)
-
-        obj = serializer.save()
-
-        return success_response(
-            "اطلاعیه ایجاد شد", GoldAnnouncementSerializer(obj).data
+        serializer = GoldAnnouncementSerializer(
+            data=request.data
         )
 
-    # ======================
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        # ذخیره اطلاعیه
+        obj = serializer.save()
+
+        title = str(obj.title)
+        body = str(obj.description)
+        target_url = str(obj.link or "")
+        image_url = str(obj.image_url or "")
+
+        # =====================================================
+        # DATA PAYLOAD
+        # فقط اطلاعات موردنیاز Android
+        # =====================================================
+
+        data_payload = {
+            "title": title,
+            "description": body,
+            "link": target_url,
+            "image_url": image_url,
+        }
+
+        notification_result = None
+
+        # =====================================================
+        # SEND FCM TO ALL USERS
+        # =====================================================
+
+        try:
+
+            notification_result = FCMService.send_to_topic(
+
+                topic=FCMService.TOPICS["ALL_USERS"],
+
+                title=title,
+
+                body=body,
+
+                data=data_payload,
+
+                image_url=image_url or None,
+
+                priority="high",
+            )
+
+            # =================================================
+            # SUCCESS
+            # =================================================
+
+            if (
+                notification_result
+                and notification_result.get("success")
+            ):
+
+                obj.is_sent = True
+                obj.sent_at = timezone.now()
+
+                obj.save(
+                    update_fields=[
+                        "is_sent",
+                        "sent_at",
+                    ]
+                )
+
+                create_admin_log(
+
+                    request=request,
+
+                    user=request.user,
+
+                    action_type=(
+                        "ANNOUNCEMENT_WITH_NOTIFICATION"
+                    ),
+
+                    action=(
+                        "ایجاد اطلاعیه و ارسال نوتیفیکیشن"
+                    ),
+
+                    model_name="GoldAnnouncement",
+
+                    object_id=obj.id,
+
+                    success=True,
+
+                    description=f"""
+ایجاد اطلاعیه جدید
+
+عنوان:
+{title}
+
+متن:
+{body}
+
+لینک:
+{target_url}
+
+Image:
+{image_url}
+
+Topic:
+{FCMService.TOPICS["ALL_USERS"]}
+
+FCM Message ID:
+{notification_result.get("message_id")}
+"""
+                )
+
+            # =================================================
+            # FAILED
+            # =================================================
+
+            else:
+
+                error_message = (
+                    notification_result.get("message")
+                    if notification_result
+                    else "نامشخص"
+                )
+
+                create_admin_log(
+
+                    request=request,
+
+                    user=request.user,
+
+                    action_type=(
+                        "ANNOUNCEMENT_NOTIFICATION_FAILED"
+                    ),
+
+                    action=(
+                        "خطا در ارسال نوتیفیکیشن"
+                    ),
+
+                    model_name="GoldAnnouncement",
+
+                    object_id=obj.id,
+
+                    success=False,
+
+                    description=f"""
+خطا در ارسال نوتیفیکیشن
+
+عنوان:
+{title}
+
+خطا:
+{error_message}
+"""
+                )
+
+        except Exception as e:
+
+            logger.exception(
+                "Gold announcement FCM error: %s",
+                str(e)
+            )
+
+            create_admin_log(
+
+                request=request,
+
+                user=request.user,
+
+                action_type=(
+                    "ANNOUNCEMENT_NOTIFICATION_ERROR"
+                ),
+
+                action=(
+                    "خطا در ارسال نوتیفیکیشن اطلاعیه"
+                ),
+
+                model_name="GoldAnnouncement",
+
+                object_id=obj.id,
+
+                success=False,
+
+                error_message=str(e),
+            )
+
+        # =====================================================
+        # RESPONSE
+        # =====================================================
+
+        response_data = GoldAnnouncementSerializer(
+            obj
+        ).data
+
+        response_data["notification"] = {
+
+            "sent": bool(
+                notification_result
+                and notification_result.get("success")
+            ),
+
+            "topic": (
+                FCMService.TOPICS["ALL_USERS"]
+            ),
+
+            "message_id": (
+                notification_result.get("message_id")
+                if notification_result
+                else None
+            ),
+
+            "data_payload": data_payload,
+        }
+
+        return success_response(
+            "اطلاعیه ایجاد شد",
+            response_data,
+            status_code=201
+        )
+
+    # =========================================================
     # UPDATE
-    # ======================
+    # =========================================================
 
-    def update(self, request, pk=None, *args, **kwargs):
+    def update(
+        self,
+        request,
+        pk=None,
+        *args,
+        **kwargs
+    ):
 
-        obj = get_object_or_404(GoldAnnouncement, pk=pk)
+        obj = get_object_or_404(
+            GoldAnnouncement,
+            pk=pk
+        )
 
-        serializer = GoldAnnouncementSerializer(obj, data=request.data, partial=True)
+        serializer = GoldAnnouncementSerializer(
+            obj,
+            data=request.data,
+            partial=True
+        )
 
-        serializer.is_valid(raise_exception=True)
+        serializer.is_valid(
+            raise_exception=True
+        )
 
         serializer.save()
 
         obj.refresh_from_db()
 
         return success_response(
-            "اطلاعیه ویرایش شد", {"results": GoldAnnouncementSerializer(obj).data}
+            "اطلاعیه ویرایش شد",
+            {
+                "results":
+                GoldAnnouncementSerializer(obj).data
+            }
         )
 
-    # ======================
+    # =========================================================
     # DELETE
-    # ======================
+    # =========================================================
 
-    def destroy(self, request, pk=None):
+    def destroy(
+        self,
+        request,
+        pk=None
+    ):
 
-        obj = get_object_or_404(GoldAnnouncement, pk=pk)
+        obj = get_object_or_404(
+            GoldAnnouncement,
+            pk=pk
+        )
 
         obj.delete()
 
-        return success_response("اطلاعیه حذف شد")
-
-
+        return success_response(
+            "اطلاعیه حذف شد"
+        )
 # =========================================================
 # SILVER ANNOUNCEMENTS
 # =========================================================
@@ -13018,3 +13391,4 @@ class VersionControlAdminViewSet(ModelViewSet):
             "نسخه با موفقیت فعال شد",
             self.serializer_class(obj, context={"request": request}).data
         )
+

@@ -1,1 +1,5 @@
-.vscode/sftp-deploy.json
+.vscode/sftp-deploy.jsonfirebase-credentials.json
+**/__pycache__/
+__pycache__/
+*.pyc
+firebase-credentials.json

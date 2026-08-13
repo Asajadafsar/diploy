@@ -2321,3 +2321,247 @@ class TicketTrackingView(APIView):
             message="وضعیت تیکت",
             data=data
         )
+
+import logging
+
+from django.db import transaction
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+from .models import FCMToken
+from .serializers import (
+    FCMTokenRegisterSerializer,
+    FCMTokenUnregisterSerializer,
+)
+from .fcm_service import FCMService
+from .utils import success_response, error_response
+
+from admin_panel.utils import create_admin_log
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# FCM REGISTER
+# ============================================================
+
+class FCMTokenRegisterView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        serializer = FCMTokenRegisterSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+
+            return error_response(
+                "اطلاعات نامعتبر است",
+                serializer.errors,
+                status_code=400
+            )
+
+        token = serializer.validated_data["token"]
+
+        device_name = serializer.validated_data.get(
+            "device_name"
+        )
+
+        device_type = serializer.validated_data.get(
+            "device_type",
+            "android"
+        )
+
+        user = request.user
+
+        try:
+
+            with transaction.atomic():
+
+                # اگر این token قبلاً برای کاربر دیگری ثبت شده
+                # به کاربر فعلی منتقل می‌شود.
+                fcm_token, created = FCMToken.objects.update_or_create(
+
+                    token=token,
+
+                    defaults={
+                        "user": user,
+                        "device_name": (
+                            device_name
+                            or f"دستگاه {device_type}"
+                        ),
+                        "device_type": device_type,
+                        "is_active": True,
+                        "last_seen_at": timezone.now(),
+                    }
+                )
+
+                # Subscribe به all_users
+                topic_result = FCMService.register_topic(
+                    token=token,
+                    topic=FCMService.TOPICS["ALL_USERS"]
+                )
+
+                if not topic_result.get("success"):
+
+                    logger.warning(
+                        "FCM token saved but topic subscription failed. "
+                        "user=%s token=%s",
+                        user.id,
+                        token[:20]
+                    )
+
+                create_admin_log(
+                    request=request,
+                    user=user,
+                    action_type="FCM_TOKEN_REGISTER",
+                    action="ثبت توکن FCM",
+                    model_name="FCMToken",
+                    object_id=fcm_token.id,
+                    success=True,
+                    description=f"""
+ثبت توکن FCM
+
+کاربر: {user.mobile}
+ID کاربر: {user.id}
+نوع دستگاه: {device_type}
+نام دستگاه: {device_name or 'نامشخص'}
+توکن: {token[:20]}...
+وضعیت: {"جدید" if created else "بروزرسانی"}
+Topic: {FCMService.TOPICS["ALL_USERS"]}
+"""
+                )
+
+            return success_response(
+                message="توکن FCM با موفقیت ثبت شد",
+                data={
+                    "user_id": user.id,
+                    "device_name": fcm_token.device_name,
+                    "device_type": fcm_token.device_type,
+                    "is_active": fcm_token.is_active,
+                    "is_new": created,
+                    "topic": FCMService.TOPICS["ALL_USERS"],
+                    "topic_registered": topic_result.get(
+                        "success",
+                        False
+                    ),
+                }
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "FCM token registration error: %s",
+                str(e)
+            )
+
+            return error_response(
+                "خطا در ثبت توکن FCM",
+                str(e),
+                status_code=500
+            )
+
+
+# ============================================================
+# FCM UNREGISTER
+# ============================================================
+
+class FCMTokenUnregisterView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        serializer = FCMTokenUnregisterSerializer(
+            data=request.data
+        )
+
+        if not serializer.is_valid():
+
+            return error_response(
+                "اطلاعات نامعتبر است",
+                serializer.errors,
+                status_code=400
+            )
+
+        token = serializer.validated_data["token"]
+
+        user = request.user
+
+        try:
+
+            fcm_token = FCMToken.objects.get(
+                user=user,
+                token=token,
+            )
+
+        except FCMToken.DoesNotExist:
+
+            return error_response(
+                "توکن FCM یافت نشد",
+                status_code=404
+            )
+
+        fcm_token_id = fcm_token.id
+
+        # قبل از حذف، از topic خارجش می‌کنیم
+        unsubscribe_result = (
+            FCMService.unsubscribe_token_from_topic(
+                token=token,
+                topic=FCMService.TOPICS["ALL_USERS"]
+            )
+        )
+
+        try:
+
+            fcm_token.delete()
+
+            create_admin_log(
+                request=request,
+                user=user,
+                action_type="FCM_TOKEN_UNREGISTER",
+                action="حذف توکن FCM",
+                model_name="FCMToken",
+                object_id=fcm_token_id,
+                success=True,
+                description=f"""
+حذف توکن FCM
+
+کاربر: {user.mobile}
+ID کاربر: {user.id}
+توکن: {token[:20]}...
+Topic: {FCMService.TOPICS["ALL_USERS"]}
+Unsubscribe: {
+    "موفق"
+    if unsubscribe_result.get("success")
+    else "ناموفق"
+}
+"""
+            )
+
+            return success_response(
+                message="توکن FCM با موفقیت حذف شد",
+                data={
+                    "removed": True,
+                    "topic_unregistered": unsubscribe_result.get(
+                        "success",
+                        False
+                    ),
+                }
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "FCM token deletion error: %s",
+                str(e)
+            )
+
+            return error_response(
+                "خطا در حذف توکن FCM",
+                str(e),
+                status_code=500
+            )

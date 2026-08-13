@@ -1,5 +1,6 @@
 
 from datetime import datetime
+import time
 import uuid
 
 import jdatetime
@@ -75,40 +76,112 @@ def send_bale_otp(mobile, code):
 # OTP SMS + BALE
 # ==========================================
 
+# def send_otp_sms(mobile, code, client_type="gold"):
+#     url = "https://api.sms-webservice.com/api/V3/SendTokenSingle"
+#     api_key = "276941-6FB7E264C3C440E09148F711F94913C6"
+
+#     client_type = (client_type or "gold").lower().strip()
+
+#     if client_type == "silver":
+#         template_key = "darinetem2"
+#     else:
+#         template_key = "darinetem"
+
+#     params = {
+#         "ApiKey": api_key,
+#         "TemplateKey": template_key,
+#         "Destination": mobile,
+#         "p1": code,
+#         "p2": code,
+#         "p3": "SbBVMIJwADu",
+#     }
+
+#     try:
+#         response = requests.get(url, params=params, timeout=30)
+
+#         sms_success = (
+#             response.status_code == 200
+#             and '"id"' in response.text.lower()
+#         )
+
+#         if not sms_success:
+#             print("SMS FAIL RESPONSE:", response.text)
+
+#         # ----------------------------
+#         # ارسال همزمان در بله
+#         # ----------------------------
+#         try:
+#             send_bale_otp(mobile, code)
+#         except Exception as e:
+#             print("BALE SEND ERROR:", e)
+
+#         return sms_success
+
+#     except requests.exceptions.Timeout:
+#         print("SMS TIMEOUT - assuming success for stability")
+
+#         try:
+#             send_bale_otp(mobile, code)
+#         except Exception as e:
+#             print("BALE SEND ERROR:", e)
+
+#         return True
+
+#     except Exception as e:
+#         print(f"SMS Connection Error: {e}")
+
+#         try:
+#             send_bale_otp(mobile, code)
+#         except Exception as ex:
+#             print("BALE SEND ERROR:", ex)
+
+#         return False
+
 def send_otp_sms(mobile, code, client_type="gold"):
-    url = "https://api.sms-webservice.com/api/V3/SendTokenSingle"
+    url = "https://api.sms-webservice.com/api/V3/SendBulk"
     api_key = "276941-6FB7E264C3C440E09148F711F94913C6"
+    sender = 50004075002699
 
     client_type = (client_type or "gold").lower().strip()
 
-    if client_type == "silver":
-        template_key = "darinetem2"
-    else:
-        template_key = "darinetem"
+    text = f"""<#>
+*پلتفرم دارینه*
+کد ورود شما : {code}
 
-    params = {
+@gold.darine.shop #{code}
+SbBVMIJwADu""".strip()
+
+    payload = {
         "ApiKey": api_key,
-        "TemplateKey": template_key,
-        "Destination": mobile,
-        "p1": code,
-        "p2": code,
-        "p3": "",
+        "Text": text,
+        "Sender": sender,
+        "Recipients": [
+            {
+                "Destination": mobile,
+                "UserTraceId": int(time.time())
+            }
+        ],
     }
 
     try:
-        response = requests.get(url, params=params, timeout=30)
-
-        sms_success = (
-            response.status_code == 200
-            and '"id"' in response.text.lower()
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
         )
+
+        print("SMS STATUS:", response.status_code)
+        print("SMS RESPONSE:", response.text)
+
+        data = response.json()
+
+        sms_success = data.get("Success") is True
 
         if not sms_success:
             print("SMS FAIL RESPONSE:", response.text)
 
-        # ----------------------------
         # ارسال همزمان در بله
-        # ----------------------------
         try:
             send_bale_otp(mobile, code)
         except Exception as e:
@@ -135,8 +208,6 @@ def send_otp_sms(mobile, code, client_type="gold"):
             print("BALE SEND ERROR:", ex)
 
         return False
-
-
 # ==========================================
 # LOGIN SUCCESS SMS
 # ==========================================

@@ -7828,3 +7828,108 @@ class VersionControlView(APIView):
                     'Expires': '0',
                 }
             )
+
+
+
+# gold_app/views.py - اضافه کردن ویو اطلاعیه‌های کاربر
+
+from admin_panel.models import GoldAnnouncement, GoldAnnouncementRead
+from .serializers import GoldAnnouncementUserSerializer
+from accounts.utils import success_response, error_response
+
+
+class UserAnnouncementsView(APIView):
+    """
+    دریافت لیست اطلاعیه‌ها برای کاربر با وضعیت خوانده/نخوانده
+    """
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # دریافت همه اطلاعیه‌های ارسال شده
+        announcements = GoldAnnouncement.objects.filter(is_sent=True).order_by('-created_at')
+        
+        results = []
+        for ann in announcements:
+            # بررسی خوانده شده
+            read_record = GoldAnnouncementRead.objects.filter(
+                user=user,
+                announcement=ann
+            ).first()
+            
+            is_read = read_record.is_read if read_record else False
+            
+            results.append({
+                'id': ann.id,
+                'title': ann.title,
+                'description': ann.description,
+                'link': ann.link,
+                'image_url': ann.image_url,
+                'created_at': ann.created_at,
+                'is_read': is_read,
+                'read_at': read_record.read_at if read_record else None,
+            })
+        
+        # ✅ محاسبه unread_count برای کاربر
+        total_announcements = announcements.count()
+        read_count = GoldAnnouncementRead.objects.filter(
+            user=user,
+            is_read=True
+        ).count()
+        unread_count = total_announcements - read_count
+        
+        return success_response(
+            message="لیست اطلاعیه‌ها",
+            data={
+                'unread_count': unread_count,  # ✅ تعداد خوانده نشده
+                'results': results,
+                'total': len(results),
+            }
+        )
+
+
+class MarkAnnouncementReadView(APIView):
+    """
+    علامت‌گذاری یک اطلاعیه به عنوان خوانده شده
+    """
+    
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, announcement_id):
+        user = request.user
+        
+        try:
+            announcement = GoldAnnouncement.objects.get(id=announcement_id, is_sent=True)
+        except GoldAnnouncement.DoesNotExist:
+            return error_response("اطلاعیه یافت نشد", status_code=404)
+        
+        # ثبت خوانده شدن
+        read_record, created = GoldAnnouncementRead.objects.get_or_create(
+            user=user,
+            announcement=announcement,
+            defaults={'is_read': True, 'read_at': timezone.now()}
+        )
+        
+        if not created and not read_record.is_read:
+            read_record.is_read = True
+            read_record.read_at = timezone.now()
+            read_record.save()
+        
+        # ✅ محاسبه unread_count جدید
+        total_announcements = GoldAnnouncement.objects.filter(is_sent=True).count()
+        read_count = GoldAnnouncementRead.objects.filter(
+            user=user,
+            is_read=True
+        ).count()
+        unread_count = total_announcements - read_count
+        
+        return success_response(
+            message="اطلاعیه به عنوان خوانده شده علامت‌گذاری شد",
+            data={
+                'announcement_id': announcement_id,
+                'is_read': True,
+                'unread_count': unread_count,  # ✅ تعداد باقی‌مانده
+            }
+        )

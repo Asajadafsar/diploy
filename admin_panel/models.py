@@ -293,15 +293,64 @@ class SilverPriceOffset(models.Model):
 # =========================================================
 
 
+# class GoldAnnouncement(models.Model):
+
+#     title = models.CharField(max_length=255, verbose_name="عنوان")
+
+#     description = models.TextField(verbose_name="توضیحات")
+
+#     link = models.URLField(blank=True, null=True, verbose_name="لینک")
+
+#     created_at = models.DateTimeField(auto_now_add=True)
+
+#     class Meta:
+#         ordering = ["-created_at"]
+#         verbose_name = "اطلاعیه طلا"
+#         verbose_name_plural = "اطلاعیه‌های طلا"
+
+#     def __str__(self):
+#         return self.title
+
+
+
+
+# class GoldAnnouncementRead(models.Model):
+
+#     user = models.ForeignKey(
+#         settings.AUTH_USER_MODEL,
+#         on_delete=models.CASCADE
+#     )
+
+#     announcement = models.ForeignKey(
+#         GoldAnnouncement,
+#         on_delete=models.CASCADE
+#     )
+
+#     is_read = models.BooleanField(default=False)
+
+#     read_at = models.DateTimeField(null=True, blank=True)
+
+#     created_at = models.DateTimeField(auto_now_add=True)
+
+#     class Meta:
+#         unique_together = ("user", "announcement")
+        
+
+# gold_app/models.py - نسخه کامل با پشتیبانی FCM
+
 class GoldAnnouncement(models.Model):
-
     title = models.CharField(max_length=255, verbose_name="عنوان")
-
     description = models.TextField(verbose_name="توضیحات")
-
     link = models.URLField(blank=True, null=True, verbose_name="لینک")
-
+    image_url = models.URLField(blank=True, null=True, verbose_name="آدرس تصویر")  # ✅ برای نوتیفیکیشن
+    
+    # فیلدهای مربوط به ارسال نوتیفیکیشن
+    is_sent = models.BooleanField(default=False, verbose_name="ارسال شده")
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ ارسال")
+    sent_count = models.IntegerField(default=0, verbose_name="تعداد ارسال شده")
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -311,28 +360,29 @@ class GoldAnnouncement(models.Model):
     def __str__(self):
         return self.title
 
-class GoldAnnouncementRead(models.Model):
 
+class GoldAnnouncementRead(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name='read_announcements'  # ✅ اضافه کردن related_name
     )
-
     announcement = models.ForeignKey(
         GoldAnnouncement,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name='read_by_users'  # ✅ اضافه کردن related_name
     )
-
     is_read = models.BooleanField(default=False)
-
     read_at = models.DateTimeField(null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ("user", "announcement")
-        
-        
+        verbose_name = "خواندن اطلاعیه"
+        verbose_name_plural = "خواندن اطلاعیه‌ها"
+
+    def __str__(self):
+        return f"{self.user.mobile} - {self.announcement.title}"
 
 # =========================================================
 # SILVER ANNOUNCEMENT

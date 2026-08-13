@@ -127,6 +127,13 @@ SIMPLE_JWT = {
 # =========================================================
 # LANGUAGE
 # =========================================================
+# darine_config/settings.py
+
+
+# Firebase Credentials
+FIREBASE_CREDENTIALS = os.path.join(BASE_DIR, 'firebase-credentials.json')
+FIREBASE_PROJECT_ID = "darine-gold"
+FCM_WORKER_URL = 'https://red-sun-4dd8.sajadafsar313.workers.dev/'
 
 LANGUAGE_CODE = "en-us"
 

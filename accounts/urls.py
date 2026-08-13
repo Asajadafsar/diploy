@@ -4,6 +4,8 @@ from django.urls import path
 
 from .views import (
     CooperationRequestAPIView,
+    FCMTokenRegisterView,
+    FCMTokenUnregisterView,
     MarketPricesAPIView,
     RegisterStepOne,
     RegisterStepTwo,
@@ -55,8 +57,11 @@ urlpatterns = [
     path("cooperation-request/", CooperationRequestAPIView.as_view()),
     path('tickets/categories/', TicketCategoriesView.as_view(), name='ticket-categories'),
     path('tickets/', TicketListCreateView.as_view(), name='ticket-list-create'),
+    path('fcm/register/', FCMTokenRegisterView.as_view(), name='fcm-register'),
+    path('fcm/unregister/', FCMTokenUnregisterView.as_view(), name='fcm-unregister'),
     path('tickets/<int:ticket_id>/', TicketDetailView.as_view(), name='ticket-detail'),
     path('tickets/<int:ticket_id>/messages/', TicketMessagesView.as_view(), name='ticket-messages'),
     path('tickets/unread/count/', TicketUnreadCountView.as_view(), name='ticket-unread-count'),
     path('tickets/tracking/<str:tracking_code>/', TicketTrackingView.as_view(), name='ticket-tracking'),
+    
 ]

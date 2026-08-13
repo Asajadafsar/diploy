@@ -258,7 +258,114 @@ class GoldTransactionSerializer(serializers.ModelSerializer):
         except:
             return None
 
+# gold_app/serializers.py - اضافه کردن GoldAnnouncementUserSerializer
 
+from rest_framework import serializers
+from admin_panel.models import GoldAnnouncement, GoldAnnouncementRead
+
+
+class GoldAnnouncementUserSerializer(serializers.ModelSerializer):
+    """
+    سریالایزر اطلاعیه برای کاربر
+    شامل وضعیت خوانده/نخوانده و تعداد کل خوانده نشده
+    """
+    
+    is_read = serializers.SerializerMethodField()
+    read_at = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GoldAnnouncement
+        fields = [
+            'id',
+            'title',
+            'description',
+            'link',
+            'image_url',
+            'created_at',
+            'is_read',
+            'read_at',
+            'unread_count',
+        ]
+
+    def get_is_read(self, obj):
+        """بررسی اینکه کاربر فعلی این اطلاعیه را خوانده است یا نه"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            read_record = GoldAnnouncementRead.objects.filter(
+                user=request.user,
+                announcement=obj
+            ).first()
+            return read_record.is_read if read_record else False
+        return False
+
+    def get_read_at(self, obj):
+        """تاریخ خواندن اطلاعیه توسط کاربر"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            read_record = GoldAnnouncementRead.objects.filter(
+                user=request.user,
+                announcement=obj
+            ).first()
+            return read_record.read_at if read_record else None
+        return None
+
+    def get_unread_count(self, obj):
+        """
+        ✅ تعداد کل اطلاعیه‌های خوانده نشده برای کاربر فعلی
+        این مقدار برای همه اطلاعیه‌ها یکسان است
+        """
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            total = GoldAnnouncement.objects.filter(is_sent=True).count()
+            read_count = GoldAnnouncementRead.objects.filter(
+                user=user,
+                is_read=True
+            ).count()
+            return total - read_count
+        return 0
+
+
+class GoldAnnouncementAdminSerializer(serializers.ModelSerializer):
+    """
+    سریالایزر اطلاعیه برای پنل ادمین
+    """
+    
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GoldAnnouncement
+        fields = (
+            "id",
+            "title",
+            "description",
+            "link",
+            "image_url",
+            "is_sent",
+            "sent_at",
+            "sent_count",
+            "unread_count",
+            "created_at",
+        )
+        read_only_fields = (
+            "id",
+            "created_at",
+            "is_sent",
+            "sent_at",
+            "sent_count",
+            "unread_count",
+        )
+
+    def get_unread_count(self, obj):
+        """تعداد کاربرانی که این اطلاعیه را نخوانده‌اند (برای پنل ادمین)"""
+        from accounts.models import User
+        total_users = User.objects.filter(is_active=True).count()
+        read_count = GoldAnnouncementRead.objects.filter(
+            announcement=obj,
+            is_read=True
+        ).count()
+        return total_users - read_count
 
 
 

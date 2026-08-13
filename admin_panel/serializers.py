@@ -2019,25 +2019,47 @@ class GoldPriceOffsetSerializer(serializers.ModelSerializer):
 # =========================================================
 
 
-class GoldAnnouncementSerializer(serializers.ModelSerializer):
+# class GoldAnnouncementSerializer(serializers.ModelSerializer):
 
+#     class Meta:
+#         model = GoldAnnouncement
+
+#         fields = (
+#             "id",
+#             "title",
+#             "description",
+#             "link",
+#             "created_at",
+#         )
+
+#         read_only_fields = (
+#             "id",
+#             "created_at",
+#         )
+
+# admin_panel/serializers.py - GoldAnnouncementSerializer
+
+class GoldAnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoldAnnouncement
-
         fields = (
             "id",
             "title",
             "description",
             "link",
+            "image_url",
+            "is_sent",
+            "sent_at",
+            "sent_count",
             "created_at",
         )
-
         read_only_fields = (
             "id",
             "created_at",
+            "is_sent",
+            "sent_at",
+            "sent_count",
         )
-
-
 # =========================================================
 # SILVER ANNOUNCEMENT
 # =========================================================

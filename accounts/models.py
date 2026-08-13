@@ -672,3 +672,159 @@ class TicketMessage(models.Model):
         
         # بروزرسانی وضعیت تیکت بر اساس آخرین پیام
         self.ticket.update_status_based_on_last_message()
+
+
+
+
+# accounts/models.py - اضافه کردن مدل‌های FCM
+from django.db import models
+from django.conf import settings
+
+
+class FCMToken(models.Model):
+    DEVICE_TYPES = (
+        ("android", "Android"),
+        ("ios", "iOS"),
+        ("web", "Web"),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="fcm_tokens",
+    )
+
+    token = models.TextField(
+        unique=True,
+        db_index=True,
+    )
+
+    device_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
+
+    device_type = models.CharField(
+        max_length=20,
+        choices=DEVICE_TYPES,
+        default="android",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    last_seen_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        db_table = "fcm_tokens"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user_id} - {self.device_type} - {self.token[:20]}"
+
+
+class FCMNotification(models.Model):
+    """
+    مدل ذخیره نوتیفیکیشن‌های ارسال شده
+    """
+    
+    PRIORITY_CHOICES = [
+        ('high', 'بالا'),
+        ('normal', 'معمولی'),
+        ('low', 'پایین'),
+    ]
+    
+    title = models.CharField(max_length=255, verbose_name="عنوان")
+    body = models.TextField(verbose_name="متن پیام")
+    image_url = models.URLField(blank=True, null=True, verbose_name="آدرس تصویر")
+    target_url = models.URLField(blank=True, null=True, verbose_name="آدرس هدف")
+    
+    # کاربران هدف (اگر null باشد => همه کاربران)
+    target_users = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name='notifications',
+        verbose_name="کاربران هدف"
+    )
+    
+    # تاپیک هدف (اگر null باشد => همه کاربران)
+    topic = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="تاپیک هدف",
+        help_text="مثلاً: all_users, gold_updates, etc."
+    )
+    
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='high',
+        verbose_name="اولویت"
+    )
+    
+    # آمار ارسال
+    sent_count = models.IntegerField(default=0, verbose_name="تعداد ارسال شده")
+    delivered_count = models.IntegerField(default=0, verbose_name="تعداد تحویل شده")
+    failed_count = models.IntegerField(default=0, verbose_name="تعداد ناموفق")
+    
+    # وضعیت
+    is_sent = models.BooleanField(default=False, verbose_name="ارسال شده")
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ ارسال")
+    
+    # برای کاربر (چند نوتیفیکیشن خوانده نشده)
+    unread_count = models.IntegerField(default=0, verbose_name="تعداد خوانده نشده")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "نوتیفیکیشن FCM"
+        verbose_name_plural = "نوتیفیکیشن‌های FCM"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.sent_count} ارسال"
+
+
+class UserNotificationRead(models.Model):
+    """
+    مدل ثبت خوانده شدن نوتیفیکیشن توسط کاربر
+    """
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='read_notifications'
+    )
+    
+    notification = models.ForeignKey(
+        FCMNotification,
+        on_delete=models.CASCADE,
+        related_name='read_by_users'
+    )
+    
+    is_read = models.BooleanField(default=False, verbose_name="خوانده شده")
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ خواندن")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "خواندن نوتیفیکیشن"
+        verbose_name_plural = "خواندن نوتیفیکیشن‌ها"
+        unique_together = [['user', 'notification']]
+    
+    def __str__(self):
+        return f"{self.user.mobile} - {self.notification.title}"

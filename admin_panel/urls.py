@@ -534,6 +534,7 @@ urlpatterns = [
     path('investment/preview/', GoldInvestmentPreviewView.as_view(), name='gold-investment-preview'),
     path('investment/create/', GoldInvestmentCreateView.as_view(), name='gold-investment-create'),
     path('investment/list/', GoldInvestmentListView.as_view(), name='gold-investment-list'),
+    
     path('investment/<int:investment_id>/', GoldInvestmentDetailView.as_view(), name='gold-investment-detail'),
     path('investment/<int:investment_id>/cancel/', GoldInvestmentCancelView.as_view(), name='gold-investment-cancel'),
     path('investment/<int:investment_id>/collect-profit/', GoldInvestmentCollectProfitView.as_view(), name='gold-investment-collect-profit'),

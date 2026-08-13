@@ -1580,3 +1580,54 @@ class TicketUpdateSerializer(serializers.ModelSerializer):
                 f"توضیحات باید حداقل {min_length} کاراکتر باشد (شما {len(value)} کاراکتر وارد کردید)"
             )
         return value
+
+
+# accounts/serializers.py - اضافه کردن سریالایزرهای FCM
+
+from rest_framework import serializers
+from .models import FCMToken
+
+from rest_framework import serializers
+
+
+class FCMTokenRegisterSerializer(serializers.Serializer):
+
+    token = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        error_messages={
+            "required": "توکن FCM الزامی است.",
+            "blank": "توکن FCM نمی‌تواند خالی باشد.",
+        },
+    )
+
+    device_name = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    device_type = serializers.ChoiceField(
+        choices=[
+            ("android", "Android"),
+            ("ios", "iOS"),
+            ("web", "Web"),
+        ],
+        required=False,
+        default="android",
+    )
+
+
+class FCMTokenUnregisterSerializer(serializers.Serializer):
+
+    token = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        error_messages={
+            "required": "توکن FCM الزامی است.",
+            "blank": "توکن FCM نمی‌تواند خالی باشد.",
+        },
+    )
