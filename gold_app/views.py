@@ -2388,7 +2388,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from accounts.models import ReferralEarning, ReferralSetting
 from accounts.utils import create_referral_profit, success_response
-
+from django.core.cache import cache
 # =========================================================
 # GOLD REFERRAL INFO API VIEW - اصلاح شده ✅
 # =========================================================
@@ -2402,62 +2402,114 @@ class GoldReferralInfoAPIView(APIView):
 
     def get(self, request):
 
+        user = request.user
+
+        # =====================================================
+        # Referral Earnings
+        # =====================================================
+
         earnings = ReferralEarning.objects.filter(
-            referrer=request.user,
+            referrer=user,
             source_type="GOLD",
         )
 
-        total_profit = earnings.aggregate(
-            total=Sum("profit")
-        )["total"] or 0
+        totals = earnings.aggregate(
+            total_profit=Sum("profit"),
+            total_transactions=Sum("transaction_amount"),
+        )
 
-        total_transactions = earnings.aggregate(
-            total=Sum("transaction_amount")
-        )["total"] or 0
+        total_profit = totals["total_profit"] or 0
+        total_transactions = totals["total_transactions"] or 0
 
-        # ✅ دریافت از FeeSetting (نه ReferralSetting)
-        from accounts.models import FeeSetting
-        
+        # =====================================================
+        # Referral Settings
+        # =====================================================
+
         setting = FeeSetting.objects.first()
-        if not setting:
-            setting = FeeSetting.objects.create(
-                gold_buy_fee=0.01,
-                gold_sell_fee=0.01,
-                silver_buy_fee=0.01,
-                silver_sell_fee=0.01,
-                gold_referral_percent=20,
-                silver_referral_percent=20,
+
+        if setting:
+            referral_percent = float(
+                setting.gold_referral_percent or 0
             )
+        else:
+            referral_percent = 20.0
 
-        # ✅ تعداد کاربران دعوت شده (منحصر به فرد)
-        referrals_count = User.objects.filter(referred_by=request.user).count()
-        
-        # ✅ تعداد کل سودهای رفرال
-        total_earnings_count = earnings.count()
+        # =====================================================
+        # User-specific Referral Percent
+        # =====================================================
 
-        # ✅ دریافت درصد رفرال اختصاصی کاربر از Cache
-        from django.core.cache import cache
-        cache_key = f"user_referral_percent_{request.user.id}"
+        cache_key = f"user_referral_percent_{user.id}"
         cached_percent = cache.get(cache_key)
-        
+
         if cached_percent is not None:
             referral_percent = float(cached_percent)
-        else:
-            # اگر در Cache نبود، از تنظیمات عمومی استفاده کن
-            referral_percent = float(setting.gold_referral_percent)
+
+        # =====================================================
+        # Referral Code
+        # =====================================================
+
+        referral_code = getattr(
+            user,
+            "referral_code",
+            None
+        )
+
+        # =====================================================
+        # Referral Link
+        # =====================================================
+
+        referral_link = None
+
+        if referral_code:
+            referral_link = (
+                f"https://gold.darine.shop/login/register"
+                f"?ref={referral_code}"
+            )
+
+        # =====================================================
+        # Number of Referred Users
+        # =====================================================
+
+        referrals_count = User.objects.filter(
+            referred_by=user
+        ).count()
+
+        # =====================================================
+        # Total Referral Earnings
+        # =====================================================
+
+        total_earnings_count = earnings.count()
+
+        # =====================================================
+        # Response
+        # =====================================================
 
         return success_response(
             message="اطلاعات رفرال طلا",
             data={
-                "referral_code": request.user.referral_code,
-                "referral_percent": referral_percent,  # ✅ درصد اختصاصی یا عمومی
-                "total_gold_sales": float(total_transactions),
-                "total_earnings": float(total_profit),
-                "referrals_count": referrals_count,  # ✅ تعداد کاربران دعوت شده
-                "total_earnings_count": total_earnings_count,  # ✅ تعداد کل سودها
+                "referral_code": referral_code,
+                "referral_link": referral_link,
+
+                "referral_percent": referral_percent,
+
+                "total_gold_sales": float(
+                    total_transactions
+                ),
+
+                "total_earnings": float(
+                    total_profit
+                ),
+
+                "referrals_count": referrals_count,
+
+                "total_earnings_count": total_earnings_count,
+
                 "wallet_type": "GOLD",
             }
         )
+
+
+
 # =========================================================
 # REPORTS (GOLD)
 # =========================================================
